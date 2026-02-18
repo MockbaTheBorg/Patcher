@@ -236,6 +236,23 @@ The number of bytes to write is determined by the length of the sequence.
 patch "90 90 90"      # write three NOP bytes
 ```
 
+Extended behavior:
+
+- If the last `search` used wildcard tokens (`??`), the bytes matched by
+  those wildcards are captured for each search result in left-to-right order
+  and can be referenced inside a `patch` string as `?1`, `?2`, ...
+- `?N` pulls the Nth captured wildcard byte from the currently selected
+  search result (see `select <n>`). If no result is selected and exactly one
+  match exists, that result is used.
+
+Examples:
+
+```
+# search matched pattern "AA ?? ?? ??" and captured bytes b1,b2,b3
+patch "AA ?1 ?2 ?3"   # writes the exact same bytes (no-op)
+patch "AA ?3 ?2 ?1"   # writes the captured bytes in reversed order
+```
+
 #### `fill <count> <XX>`
 
 Fill *count* bytes starting at the current pointer with the byte value `XX`

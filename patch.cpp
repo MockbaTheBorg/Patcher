@@ -62,6 +62,12 @@
 // select <n>          Select the n-th search result (1-based) and set the pointer.
 //
 // patch "XX XX ..."   Overwrite bytes at the current pointer with the hex sequence.
+//                     If the last `search` used wildcards (??), the bytes
+//                     matched by those wildcards are captured per result and
+//                     may be referenced in `patch` strings as `?1`, `?2`, ...
+//                     where the currently selected search result supplies
+//                     the values. Use `select <n>` to choose a different
+//                     result set.
 //
 // assert "XX XX ..." ["message"]
 //                     Verify that bytes at the pointer match the hex sequence.
@@ -121,6 +127,9 @@ namespace patcher {
     long searchResults[MAXSEARCH];
     int  searchSelected = 0;
     int  searchCount    = 0;
+    // For each search result, store bytes matched by wildcards (??)
+    unsigned char searchWildcards[MAXSEARCH][MAXPATTERN];
+    int           searchWildcardCount[MAXSEARCH];
     bool searchPerformed = false; // true after any search() / searchnext() / searchall()
 
     // ---- Flags ----
@@ -189,6 +198,7 @@ namespace patcher {
         }
         return out;
     }
+    
 
     // Print n bytes in hex
     void printbin(const unsigned char* data, int len)
@@ -221,6 +231,51 @@ namespace patcher {
         }
         output[n] = '\0';
         return n;
+    }
+
+    // Parse a patch-style hex string which may include tokens like ?1 ?2 ...
+    // Tokens are space-separated. ?N refers to the Nth wildcard byte from the
+    // currently selected search result. Returns the byte count, or -1 on error.
+    int parsePatchString(const char* input, unsigned char* output)
+    {
+        // copy input to a local buffer to tokenize safely
+        char buf[MAXSTR];
+        removeQuotes(input, buf);
+
+        int out = 0;
+        int i = 0;
+        while (buf[i]) {
+            // skip whitespace
+            while (buf[i] && (buf[i] == ' ' || buf[i] == '\t')) i++;
+            if (!buf[i]) break;
+
+            // parse token until next whitespace
+            char token[32];
+            int t = 0;
+            while (buf[i] && buf[i] != ' ' && buf[i] != '\t' && t < (int)sizeof(token)-1) token[t++] = buf[i++];
+            token[t] = '\0';
+
+            // token could be ?N or two-hex-digit byte
+            if (token[0] == '?') {
+                // must have a number after '?'
+                if (t < 2) return -1;
+                int idx = (int)strtol(token + 1, nullptr, 10);
+                if (idx <= 0) return -1;
+                // must have a selected search result
+                if (searchSelected <= 0 || searchSelected > searchCount) return -1;
+                int sel = searchSelected - 1;
+                if (idx > searchWildcardCount[sel]) return -1;
+                if (out >= MAXPATTERN) return -1;
+                output[out++] = searchWildcards[sel][idx - 1];
+            } else {
+                // must be exactly two hex digits
+                if ((int)strlen(token) != 2) return -1;
+                if (!isxdigit((unsigned char)token[0]) || !isxdigit((unsigned char)token[1])) return -1;
+                if (out >= MAXPATTERN) return -1;
+                output[out++] = (unsigned char)strtol(token, nullptr, 16);
+            }
+        }
+        return out;
     }
 
     // Convert string to lowercase (in-place safe)
@@ -413,7 +468,16 @@ namespace patcher {
                     fprintf(stderr, "Too many search results (>%d), aborting\n", MAXSEARCH);
                     return 1;
                 }
+                // record result offset
                 searchResults[searchCount] = off;
+                // capture wildcard bytes for this match
+                int wc = 0;
+                for (int j = 0; j < searchPatternLen; j++) {
+                    if (!searchMask[j]) {
+                        searchWildcards[searchCount][wc++] = binaryData[off + j];
+                    }
+                }
+                searchWildcardCount[searchCount] = wc;
                 searchCount++;
                 if (isVerbose)
                     printf("  Match %d at offset %ld (0x%lX)\n", searchCount, off, off);
@@ -592,9 +656,10 @@ namespace patcher {
             }
             // ---- patch ----
             else if (strcmp(command, "patch") == 0) {
-                removeQuotes(argument, argument);
-                patchStringLen = str2bin(argument, patchString);
-                if (patchStringLen == 0) {
+                // patch strings may include ?N tokens which reference bytes
+                // captured by the last search's wildcards for the selected result.
+                patchStringLen = parsePatchString(argument, patchString);
+                if (patchStringLen < 0) {
                     printError("invalid patch string - aborting");
                     return 1;
                 }
