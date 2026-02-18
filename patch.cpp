@@ -40,10 +40,12 @@
 //
 // searchall "XX XX ..." Like search, but does NOT abort when zero results found.
 //
-// verify unique ["message"]
-//                     Abort if the last search did not return exactly one
-//                     result. An optional quoted string overrides the default
-//                     error message.
+// verify unique|<n> ["message"]
+//                     Abort if the last search did not return exactly the
+//                     specified number of results. The first argument may be
+//                     the word `unique` (equivalent to 1) or a positive
+//                     integer. An optional quoted string overrides the
+//                     default error message.
 //
 // count               Print the number of results from the last search.
 //
@@ -469,17 +471,49 @@ namespace patcher {
             }
             // ---- verify ----
             else if (strcmp(command, "verify") == 0) {
-                // Extract optional custom message before lowercasing
+                // Extract optional custom message (second quoted string), but keep
+                // the original argument text so we can parse the first token.
                 char customMsg[MAXSTR] = {0};
                 bool hasMsg = extractQuotedAfter(argument, 0, customMsg);
-                strToLower(argument, argument);
-                if (strncmp(argument, "unique", 6) == 0) {
-                    if (searchCount != 1) {
-                        printError(hasMsg ? customMsg : "previous search was not unique - aborting");
+
+                // Obtain first token (before whitespace or a quote)
+                char firstTok[MAXSTR] = {0};
+                int i = 0;
+                while (argument[i] && argument[i] != ' ' && argument[i] != '\t' && argument[i] != '"') {
+                    firstTok[i] = argument[i];
+                    i++;
+                }
+                firstTok[i] = '\0';
+
+                if (i == 0) {
+                    printError("invalid argument to verify command - aborting");
+                    return 1;
+                }
+
+                char lowerTok[MAXSTR];
+                strToLower(firstTok, lowerTok);
+
+                long expected = -1;
+                if (strcmp(lowerTok, "unique") == 0) {
+                    expected = 1;
+                } else {
+                    // try parsing a positive integer
+                    expected = parseNumber(firstTok);
+                    if (expected <= 0) {
+                        printError("invalid argument to verify command - aborting");
                         return 1;
                     }
-                } else {
-                    printError("invalid argument to verify command - aborting");
+                }
+
+                if (searchCount != expected) {
+                    if (hasMsg) printError(customMsg);
+                    else if (expected == 1)
+                        printError("previous search was not unique - aborting");
+                    else {
+                        char msg[MAXSTR];
+                        snprintf(msg, MAXSTR, "previous search result count %d does not match expected %ld - aborting", searchCount, expected);
+                        printError(msg);
+                    }
                     return 1;
                 }
             }

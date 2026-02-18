@@ -143,13 +143,18 @@ custom error message.
 Like `search`, but does **not** abort when zero results are found.  The result
 count will simply be 0.
 
-#### `verify unique ["message"]`
+#### `verify unique|<n> ["message"]`
 
-Abort the script if the last search did **not** return exactly one result.
-The optional quoted string overrides the default error message:
+Abort the script if the last search did **not** return exactly the specified
+number of results. The first argument may be the word `unique` (equivalent to
+`1`) or a positive integer `n`. The optional quoted string overrides the
+default error message.
+
+Examples:
 
 ```
 verify unique "Expected exactly one match for the boot signature"
+verify 3 "Expected exactly three matches for the table"
 ```
 
 #### `count`
