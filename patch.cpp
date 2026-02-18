@@ -1,4 +1,4 @@
-// Binary Patcher v2.00 - by Mockba the Borg
+// Binary Patcher - by Mockba the Borg
 // A pattern-based binary patcher driven by a simple scripting language.
 //
 // Usage: patch <script file>|-i <binary file> [<output file>] [-v]
