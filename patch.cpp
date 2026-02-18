@@ -15,14 +15,16 @@
 //
 // print "text"        Print text to stdout (no trailing newline).
 //                     Escape sequences: \r \n \t \\ \" \c \s \p
-//                       \c = search result count
+//                       \c = search result count (-1 if no search has happened yet)
 //                       \s = selected search result offset (dec + hex)
 //                       \p = current data pointer (dec + hex)
 //                     Special argument tokens:
 //                       $string  - print NUL-terminated string at pointer
 //                       $int     - print 32-bit signed int at pointer
 //                       $float   - print float at pointer
-//                       $hex32   - print 32-bit value as 8-digit uppercase hex
+//                       $hex8    - print 8-bit value as 2-digit uppercase 0x hex at pointer
+//                       $hex16   - print 16-bit value as 4-digit uppercase 0x hex at pointer
+//                       $hex32   - print 32-bit value as 8-digit uppercase 0x hex at pointer
 //
 // println "text"      Same as print but appends a newline.
 //
@@ -84,6 +86,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <cstdint>
 
 namespace mockba {
 namespace patcher {
@@ -116,6 +119,7 @@ namespace patcher {
     long searchResults[MAXSEARCH];
     int  searchSelected = 0;
     int  searchCount    = 0;
+    bool searchPerformed = false; // true after any search() / searchnext() / searchall()
 
     // ---- Flags ----
     int  lineNo       = 0;
@@ -242,7 +246,7 @@ namespace patcher {
                 case 't':  printf("\t"); break;
                 case '\\': printf("\\"); break;
                 case '"':  printf("\""); break;
-                case 'c':  printf("%d", searchCount); break;
+                case 'c':  if (!searchPerformed) printf("-1"); else printf("%d", searchCount); break;
                 case 's':
                     if (searchSelected > 0)
                         printf("%ld (0x%lX)", searchResults[searchSelected - 1],
@@ -386,6 +390,8 @@ namespace patcher {
             if (isVerbose) printf("No search pattern provided\n");
             return 1;
         }
+        // mark that a search has been attempted
+        searchPerformed = true;
         if (isVerbose) printf("Searching for pattern of %d bytes starting at offset %ld\n",
                               searchPatternLen, startOffset);
 
@@ -444,6 +450,14 @@ namespace patcher {
                     if (!boundsCheck(binaryDataPtr, 4)) return 1;
                     float val; memcpy(&val, binaryData + binaryDataPtr, 4);
                     printf("%f", val);
+                } else if (strcmp(argument, "$hex8") == 0) {
+                    if (!boundsCheck(binaryDataPtr, 1)) return 1;
+                    unsigned int val = (unsigned int)binaryData[binaryDataPtr];
+                    printf("0x%02X", val);
+                } else if (strcmp(argument, "$hex16") == 0) {
+                    if (!boundsCheck(binaryDataPtr, 2)) return 1;
+                    unsigned short val; memcpy(&val, binaryData + binaryDataPtr, 2);
+                    printf("0x%04X", val);
                 } else if (strcmp(argument, "$hex32") == 0) {
                     if (!boundsCheck(binaryDataPtr, 4)) return 1;
                     unsigned int val; memcpy(&val, binaryData + binaryDataPtr, 4);

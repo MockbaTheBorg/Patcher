@@ -92,7 +92,7 @@ The text is enclosed in double quotes and supports these escape sequences:
 | `\t` | Tab |
 | `\\` | Literal backslash |
 | `\"` | Literal double quote |
-| `\c` | Number of results from the last search |
+| `\c` | Number of results from the last search (prints -1 if no search has been performed) |
 | `\s` | Offset of the currently selected search result (decimal + hex) |
 | `\p` | Current data pointer position (decimal + hex) |
 
@@ -104,6 +104,8 @@ The text is enclosed in double quotes and supports these escape sequences:
 | `$int` | Print the 32-bit signed integer at the pointer. |
 | `$float` | Print the IEEE 754 float at the pointer. |
 | `$hex32` | Print the 32-bit value as 8-digit uppercase hex. |
+| `$hex16` | Print the 16-bit value as 4-digit uppercase hex (0xFFFF). |
+| `$hex8` | Print the 8-bit value as 2-digit uppercase hex (0xFF). |
 
 #### `println "text"`
 
